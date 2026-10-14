@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <!-- ★ APP: ocupa toda la pantalla del teléfono (también bajo la "muesca") y no deja hacer zoom a la página -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Tic-Tac-Toe 3D</title>
+
+  <!-- ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+       NUEVO — CONVERTIR LA PÁGINA EN UNA APP INSTALABLE
+       - manifest: la "ficha" de la app (nombre, icono, colores)
+       - theme-color: color de la barra de estado del teléfono
+       - apple-*: lo mismo, pero para iPhone/iPad
+       ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★ -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#1e1b4b">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="TicTacToe 3D">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+  <!-- ============================================================
+       PARTE 2: CSS — cómo se VE
+
+       ★ NUEVO (colores): en vez de escribir los colores en cada
+       sitio, los guardamos en "variables" (--bg, --text…). Para
+       cambiar de paleta solo hay que cambiar estas variables.
+       ============================================================ -->
+  <style>
+    :root {
+      --bg: #1e1b4b;
+      --scene: #15123a;
+      --accent: #4338ca;
+      --text: #ffffff;
+      --btn: #facc15;
+      --btn-text: #1e1b4b;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;   /* sin "flash" gris al tocar */
+    }
+
+    html, body {
+      height: 100%;
+      overscroll-behavior: none;                  /* sin "rebote" al deslizar */
+    }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 0;
+      /* ★ APP: deja espacio para la muesca y la barra de inicio del teléfono */
+      padding: calc(12px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));
+      user-select: none;
+      -webkit-user-select: none;
+      transition: background 0.3s;
+    }
+
+    /* Barra superior: título a la izquierda, botón de colores a la derecha */
+    header {
+      width: min(560px, 100%);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.5rem;
+    }
+
+    #colors-button {
+      padding: 8px 14px;
+      font-size: 0.95rem;
+      border: 2px solid var(--accent);
+      border-radius: 999px;
+      background: transparent;
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    /* ★ APP: margin-top y margin-bottom "auto" (en #modes y #score)
+       centran el juego en pantallas altas */
+    #modes {
+      display: flex;
+      gap: 8px;
+      margin-top: auto;
+      margin-bottom: 8px;
+    }
+
+    .mode {
+      padding: 8px 18px;
+      font-size: 0.95rem;
+      border: 2px solid var(--accent);
+      border-radius: 999px;
+      background: transparent;
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .mode.active {
+      background: var(--accent);
+    }
+
+    #status {
+      font-size: 1.3rem;
+      min-height: 1.6em;
+      margin-bottom: 4px;
+    }
+
+    /* El recuadro donde se dibuja el cubo 3D.
+       ★ APP: tan grande como quepa en la pantalla, sin pasar de 560px */
+    #scene {
+      width: max(220px, min(560px, calc(100vw - 32px), calc(100vh - 330px)));
+      width: max(220px, min(560px, calc(100vw - 32px), calc(100dvh - 330px)));
+      aspect-ratio: 1;
+      border-radius: 16px;
+      background: var(--scene);
+      cursor: grab;
+      touch-action: none;
+      transition: background 0.3s;
+    }
+
+    #hint {
+      margin-top: 8px;
+      font-size: 0.85rem;
+      opacity: 0.7;
+      text-align: center;
+    }
+
+    #restart {
+      margin-top: 14px;
+      padding: 12px 28px;
+      font-size: 1rem;
+      border: none;
+      border-radius: 999px;
+      background: var(--btn);
+      color: var(--btn-text);
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    #score {
+      margin-top: 12px;
+      margin-bottom: auto;
+      opacity: 0.8;
+    }
+
+    /* ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+       NUEVO — PANEL PARA ELEGIR COLORES (estilos)
+       Sube desde abajo, como los menús de las apps del teléfono.
+       ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★ */
+    #palette-sheet {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      z-index: 10;
+    }
+
+    #palette-sheet[hidden] {
+      display: none;
+    }
+
+    .sheet {
+      width: min(480px, 100%);
+      max-height: 85vh;
+      overflow-y: auto;
+      background: var(--scene);
+      color: var(--text);
+      border-radius: 20px 20px 0 0;
+      padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
+    }
+
+    .sheet h2 {
+      margin: 0 0 12px;
+      font-size: 1.2rem;
+    }
+
+    .palette-option {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      padding: 10px 12px;
+      margin-bottom: 6px;
+      border: 2px solid transparent;
+      border-radius: 12px;
+      background: rgba(127, 127, 127, 0.12);
+      color: inherit;
+      font-size: 1rem;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .palette-option.active {
+      border-color: var(--btn);
+    }
+
+    .swatches {
+      display: flex;
+      gap: 4px;
+    }
+
+    .swatches span {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: 1px solid rgba(127, 127, 127, 0.5);
+    }
+
+    #palette-close {
+      width: 100%;
+      margin-top: 8px;
+      padding: 12px;
+      font-size: 1rem;
+      border: none;
+      border-radius: 999px;
+      background: var(--btn);
+      color: var(--btn-text);
+      font-weight: bold;
+      cursor: pointer;
+    }
+    /* ★★★★★★★★★★ FIN de los estilos del panel de colores ★★★★★★★★★★ */
+  </style>
+</head>
+
+<body>
+  <!-- ============================================================
+       PARTE 1: HTML — QUÉ hay en la página
+       ============================================================ -->
+  <header>
+    <h1>Tic-Tac-Toe 3D</h1>
+    <button id="colors-button">🎨 Colors</button>   <!-- ★ NUEVO (colores) -->
+  </header>
+
+  <div id="modes">
+    <button class="mode active" data-mode="2players">2 Players</button>
+    <button class="mode" data-mode="computer">vs Computer</button>
+  </div>
+
+  <div id="status"></div>
+
+  <!-- Aquí dentro Three.js dibuja el cubo -->
+  <div id="scene"></div>
+  <div id="hint">Drag to rotate · Pinch to zoom · Tap a ball to play</div>
+
+  <button id="restart">New game</button>
+  <div id="score"></div>
+
+  <!-- ★ NUEVO (colores): el panel que aparece al pulsar "Colors" -->
+  <div id="palette-sheet" hidden>
+    <div class="sheet">
+      <h2>Choose colors</h2>
+      <div id="palette-list"></div>
+      <button id="palette-close">Done</button>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       PARTE 3: JavaScript — cómo se COMPORTA
+
+       Primero le decimos al navegador dónde descargar Three.js,
+       la biblioteca que dibuja en 3D (código ya hecho por otros).
+       ============================================================ -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from "three";
+    // OrbitControls: permite girar la cámara alrededor del cubo arrastrando
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+    // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+    // NUEVO — LAS PALETAS DE COLORES
+    //
+    // Cada paleta es una lista de colores con nombre:
+    //   bg: fondo de la app        scene: fondo del cubo
+    //   edge: aristas del cubo     empty: bolitas vacías
+    //   hover: bolita señalada     X / O: las letras
+    //   win: línea ganadora        btn: botón "New game"
+    //   accent: botones de modo    text: textos
+    // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+    const PALETTES = {
+      original: {
+        name: "Original", bg: "#1e1b4b", scene: "#15123a", edge: "#6366f1", empty: "#c7d2fe",
+        hover: "#facc15", X: "#f472b6", O: "#38bdf8", win: "#16a34a",
+        btn: "#facc15", btnText: "#1e1b4b", accent: "#4338ca", text: "#ffffff"
+      },
+      ocean: {
+        name: "Ocean", bg: "#082f49", scene: "#0c4a6e", edge: "#22d3ee", empty: "#bae6fd",
+        hover: "#ffffff", X: "#fb923c", O: "#2dd4bf", win: "#facc15",
+        btn: "#f97316", btnText: "#082f49", accent: "#0e7490", text: "#f0f9ff"
+      },
+      sunset: {
+        name: "Sunset", bg: "#431407", scene: "#5c1d0b", edge: "#fdba74", empty: "#fed7aa",
+        hover: "#ffffff", X: "#facc15", O: "#c084fc", win: "#4ade80",
+        btn: "#fb7185", btnText: "#431407", accent: "#9a3412", text: "#fff7ed"
+      },
+      forest: {
+        name: "Forest", bg: "#052e16", scene: "#0b3d20", edge: "#86efac", empty: "#d9f99d",
+        hover: "#ffffff", X: "#fbbf24", O: "#f0abfc", win: "#ffffff",
+        btn: "#fbbf24", btnText: "#052e16", accent: "#166534", text: "#f0fdf4"
+      },
+      light: {
+        name: "Light", bg: "#f8fafc", scene: "#e2e8f0", edge: "#94a3b8", empty: "#94a3b8",
+        hover: "#0f172a", X: "#e11d48", O: "#2563eb", win: "#16a34a",
+        btn: "#0f172a", btnText: "#ffffff", accent: "#cbd5e1", text: "#0f172a"
+      },
+      pastel: {
+        name: "Pastel", bg: "#fdf2f8", scene: "#fce7f3", edge: "#f9a8d4", empty: "#d8b4fe",
+        hover: "#a855f7", X: "#db2777", O: "#0891b2", win: "#f59e0b",
+        btn: "#a855f7", btnText: "#ffffff", accent: "#f5d0fe", text: "#831843"
+      },
+      contrast: {
+        name: "High contrast", bg: "#000000", scene: "#111111", edge: "#ffffff", empty: "#737373",
+        hover: "#f0e442", X: "#e69f00", O: "#56b4e9", win: "#ffffff",
+        btn: "#f0e442", btnText: "#000000", accent: "#404040", text: "#ffffff"
+      }
+    };
+
+    // La paleta que se está usando ahora (al principio, la original)
+    let palette = PALETTES.original;
+    // ★★★★★★★★★★ FIN de las paletas ★★★★★★★★★★
+
+    // ==========================================================
+    // A. LAS CASILLAS: 27 en total
+    //   número = x + 3·y + 9·z   (el centro del cubo es el 13)
+    // ==========================================================
+    function cellNumber(x, y, z) {
+      return x + 3 * y + 9 * z;
+    }
+
+    // ==========================================================
+    // B. LAS 49 FORMAS DE GANAR (se calculan solas)
+    // ==========================================================
+    const directions = [
+      [1, 0, 0], [0, 1, 0], [0, 0, 1],                 // rectas
+      [1, 1, 0], [1, -1, 0], [1, 0, 1], [1, 0, -1],    // diagonales de una cara
+      [0, 1, 1], [0, 1, -1],
+      [1, 1, 1], [1, 1, -1], [1, -1, 1], [1, -1, -1]   // diagonales que cruzan el cubo
+    ];
+
+    function isInside(n) {
+      return n >= 0 && n <= 2;
+    }
+
+    const winningLines = [];
+    for (let x = 0; x < 3; x++) {
+      for (let y = 0; y < 3; y++) {
+        for (let z = 0; z < 3; z++) {
+          for (const [dx, dy, dz] of directions) {
+            const endX = x + 2 * dx, endY = y + 2 * dy, endZ = z + 2 * dz;
+            if (isInside(endX) && isInside(endY) && isInside(endZ)) {
+              winningLines.push([
+                cellNumber(x, y, z),
+                cellNumber(x + dx, y + dy, z + dz),
+                cellNumber(endX, endY, endZ)
+              ]);
+            }
+          }
+        }
+      }
+    }
+
+    // ==========================================================
+    // C. PREPARAR EL "ESCENARIO" 3D (escena, cámara, dibujante, luces)
+    // ==========================================================
+    const container = document.getElementById("scene");
+
+    const scene = new THREE.Scene();
+
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+    camera.position.set(5, 4, 6.5);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    container.appendChild(renderer.domElement);
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+    const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+    sun.position.set(5, 8, 6);
+    scene.add(sun);
+
+    // Arrastrar para girar, pellizcar o rueda para acercar/alejar
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.enablePan = false;
+    controls.minDistance = 5;
+    controls.maxDistance = 14;
+
+    const SPACING = 1.2;
+
+    // El contorno del cubo (esquinas rectas)
+    const outline = new THREE.LineSegments(
+      new THREE.EdgesGeometry(new THREE.BoxGeometry(SPACING * 3, SPACING * 3, SPACING * 3)),
+      new THREE.LineBasicMaterial({ color: palette.edge, transparent: true, opacity: 0.4 })
+    );
+    scene.add(outline);
+
+    // ==========================================================
+    // D. CREAR LAS 27 BOLITAS
+    // ==========================================================
+    const cellBalls = [];
+    const cellPositions = [];
+
+    for (let z = 0; z < 3; z++) {
+      for (let y = 0; y < 3; y++) {
+        for (let x = 0; x < 3; x++) {
+          const position = new THREE.Vector3(
+            (x - 1) * SPACING, (y - 1) * SPACING, (z - 1) * SPACING
+          );
+          const ball = new THREE.Mesh(
+            new THREE.SphereGeometry(0.2, 24, 16),
+            new THREE.MeshStandardMaterial({ color: palette.empty, transparent: true, opacity: 0.7 })
+          );
+          ball.position.copy(position);
+          ball.userData.index = cellNumber(x, y, z);
+          scene.add(ball);
+
+          cellBalls[cellNumber(x, y, z)] = ball;
+          cellPositions[cellNumber(x, y, z)] = position;
+        }
+      }
+    }
+
+    // ==========================================================
+    // E. DIBUJAR UNA "X" O UNA "O" EN 3D
+    //    ★ CAMBIO (colores): el color sale de la paleta actual
+    // ==========================================================
+    function makeLetter(letter) {
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 128;
+      const ctx = canvas.getContext("2d");
+      ctx.font = "bold 96px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = palette[letter];
+      ctx.fillText(letter, 64, 70);
+
+      const sprite = new THREE.Sprite(
+        new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas) })
+      );
+      sprite.scale.set(0.75, 0.75, 0.75);
+      return sprite;
+    }
+
+    // ==========================================================
+    // F. LA MEMORIA DEL JUEGO
+    // ==========================================================
+    let board = Array(27).fill("");
+    let currentPlayer = "X";
+    let gameOver = false;
+    let score = { X: 0, O: 0, draws: 0 };
+    let vsComputer = false;
+    let computerTimer = null;
+    let letters = [];
+    let winTube = null;
+    let winningCells = [];            // ★ NUEVO (colores): para repintar las letras ganadoras
+
+    const statusText = document.getElementById("status");
+    const scoreText = document.getElementById("score");
+
+    // ==========================================================
+    // G. HACER UNA JUGADA
+    // ==========================================================
+    function makeMove(index) {
+      if (board[index] !== "" || gameOver) {
+        return false;
+      }
+
+      board[index] = currentPlayer;
+
+      cellBalls[index].visible = false;
+      const letter = makeLetter(currentPlayer);
+      letter.position.copy(cellPositions[index]);
+      scene.add(letter);
+      letters[index] = letter;
+
+      const winningLine = findWinner();
+      if (winningLine) {
+        statusText.textContent = currentPlayer + " wins! 🎉";
+        showWinningLine(winningLine);
+        playWinSound();
+        score[currentPlayer]++;
+        gameOver = true;
+      } else if (!board.includes("")) {
+        statusText.textContent = "It's a draw!";
+        score.draws++;
+        gameOver = true;
+      } else {
+        currentPlayer = currentPlayer === "X" ? "O" : "X";
+        statusText.textContent = currentPlayer + "'s turn";
+      }
+
+      updateScore();
+      return true;
+    }
+
+    function findWinner() {
+      for (const line of winningLines) {
+        const [a, b, c] = line;
+        if (board[a] !== "" && board[a] === board[b] && board[a] === board[c]) {
+          return line;
+        }
+      }
+      return null;
+    }
+
+    function showWinningLine(line) {
+      const start = cellPositions[line[0]];
+      const end = cellPositions[line[2]];
+      winTube = new THREE.Mesh(
+        new THREE.TubeGeometry(new THREE.LineCurve3(start, end), 1, 0.06, 12),
+        new THREE.MeshStandardMaterial({ color: palette.win })
+      );
+      scene.add(winTube);
+      winningCells = line;
+      line.forEach(i => letters[i].scale.set(1, 1, 1));
+    }
+
+    // ==========================================================
+    // H. EL CEREBRO DE LA COMPUTADORA
+    // ==========================================================
+    const CORNERS = [0, 2, 6, 8, 18, 20, 24, 26];
+
+    function computerMove() {
+      const choice =
+        findWinningSquare("O") ??                     // regla 1: ganar
+        findWinningSquare("X") ??                     // regla 2: bloquear
+        (board[13] === "" ? 13 : null) ??             // regla 3: centro
+        pickRandomEmpty(CORNERS) ??                   // regla 4: esquina
+        pickRandomEmpty([...Array(27).keys()]);       // regla 5: cualquiera
+
+      makeMove(choice);
+      playComputerSound();
+    }
+
+    function findWinningSquare(player) {
+      for (const line of winningLines) {
+        const marks = line.map(i => board[i]);
+        const mine = marks.filter(m => m === player).length;
+        const empty = marks.filter(m => m === "").length;
+        if (mine === 2 && empty === 1) {
+          return line[marks.indexOf("")];
+        }
+      }
+      return null;
+    }
+
+    function pickRandomEmpty(squares) {
+      const free = squares.filter(i => board[i] === "");
+      if (free.length === 0) {
+        return null;
+      }
+      return free[Math.floor(Math.random() * free.length)];
+    }
+
+    // ==========================================================
+    // SONIDOS (Web Audio API: el navegador "fabrica" el sonido)
+    // ==========================================================
+    let audioContext = null;
+
+    document.addEventListener("pointerdown", () => {
+      if (!audioContext) {
+        audioContext = new AudioContext();
+      }
+      audioContext.resume();
+    });
+
+    // "bi-ip" cuando juega la computadora
+    function playComputerSound() {
+      if (!audioContext) {
+        return;
+      }
+      const now = audioContext.currentTime;
+
+      const tone = audioContext.createOscillator();
+      tone.type = "sine";
+      tone.frequency.setValueAtTime(660, now);
+      tone.frequency.exponentialRampToValueAtTime(990, now + 0.12);
+
+      const volume = audioContext.createGain();
+      volume.gain.setValueAtTime(0.25, now);
+      volume.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+
+      tone.connect(volume);
+      volume.connect(audioContext.destination);
+      tone.start(now);
+      tone.stop(now + 0.3);
+    }
+
+    // Toca una nota
+    function playNote(frequency, startTime, duration) {
+      const tone = audioContext.createOscillator();
+      tone.type = "triangle";
+      tone.frequency.setValueAtTime(frequency, startTime);
+
+      const volume = audioContext.createGain();
+      volume.gain.setValueAtTime(0.25, startTime);
+      volume.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+
+      tone.connect(volume);
+      volume.connect(audioContext.destination);
+      tone.start(startTime);
+      tone.stop(startTime + duration);
+    }
+
+    // Fanfarria de victoria: Do-Mi-Sol-Do
+    function playWinSound() {
+      if (!audioContext) {
+        return;
+      }
+      const start = audioContext.currentTime + 0.2;
+      const melody = [523, 659, 784, 1047];
+      melody.forEach((note, i) => {
+        const isLast = i === melody.length - 1;
+        playNote(note, start + i * 0.12, isLast ? 0.6 : 0.15);
+      });
+    }
+
+    // ==========================================================
+    // I. TOCAR UNA BOLITA DEL CUBO 3D
+    // ==========================================================
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    let hoveredBall = null;
+    let pressX = 0, pressY = 0;
+
+    function ballUnderPointer(event) {
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+
+      const emptyBalls = cellBalls.filter((ball, i) => board[i] === "");
+      const hits = raycaster.intersectObjects(emptyBalls);
+      return hits.length > 0 ? hits[0].object : null;
+    }
+
+    renderer.domElement.addEventListener("pointermove", event => {
+      if (hoveredBall) {
+        hoveredBall.material.color.set(palette.empty);
+        hoveredBall.scale.set(1, 1, 1);
+      }
+      hoveredBall = gameOver ? null : ballUnderPointer(event);
+      if (hoveredBall) {
+        hoveredBall.material.color.set(palette.hover);
+        hoveredBall.scale.set(1.4, 1.4, 1.4);
+      }
+      container.style.cursor = hoveredBall ? "pointer" : "grab";
+    });
+
+    renderer.domElement.addEventListener("pointerdown", event => {
+      pressX = event.clientX;
+      pressY = event.clientY;
+    });
+
+    renderer.domElement.addEventListener("pointerup", event => {
+      const moved = Math.hypot(event.clientX - pressX, event.clientY - pressY);
+      if (moved > 8) {
+        return;   // fue un giro del cubo, no un toque
+      }
+      if (vsComputer && currentPlayer === "O") {
+        return;
+      }
+
+      const ball = ballUnderPointer(event);
+      if (!ball) {
+        return;
+      }
+
+      const played = makeMove(ball.userData.index);
+      if (played && vsComputer && !gameOver) {
+        statusText.textContent = "Computer is thinking...";
+        computerTimer = setTimeout(computerMove, 500);
+      }
+    });
+
+    // ==========================================================
+    // J. NUEVA PARTIDA, MODOS Y MARCADOR
+    // ==========================================================
+    function restartGame() {
+      clearTimeout(computerTimer);
+      board = Array(27).fill("");
+      currentPlayer = "X";
+      gameOver = false;
+      winningCells = [];
+      statusText.textContent = "X's turn";
+
+      letters.forEach(letter => letter && scene.remove(letter));
+      letters = [];
+      if (winTube) {
+        scene.remove(winTube);
+        winTube = null;
+      }
+      cellBalls.forEach(ball => {
+        ball.visible = true;
+        ball.material.color.set(palette.empty);
+        ball.scale.set(1, 1, 1);
+      });
+    }
+
+    function updateScore() {
+      scoreText.textContent =
+        "X: " + score.X + "   ·   O: " + score.O + "   ·   Draws: " + score.draws;
+    }
+
+    const modeButtons = document.querySelectorAll(".mode");
+    function changeMode(event) {
+      vsComputer = event.target.dataset.mode === "computer";
+      modeButtons.forEach(b => b.classList.remove("active"));
+      event.target.classList.add("active");
+      score = { X: 0, O: 0, draws: 0 };
+      restartGame();
+      updateScore();
+    }
+    modeButtons.forEach(b => b.addEventListener("click", changeMode));
+    document.getElementById("restart").addEventListener("click", restartGame);
+
+    // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+    // NUEVO — CAMBIAR DE PALETA
+    //
+    // applyPalette pinta TODO con los colores de la paleta elegida:
+    //   1. los colores de la página (fondo, botones, textos)
+    //   2. los objetos 3D (aristas, bolitas, línea ganadora)
+    //   3. las letras X y O que ya están en el cubo
+    // Y guarda la elección para la próxima vez que abras la app.
+    // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+    function applyPalette(key) {
+      palette = PALETTES[key];
+
+      // 1. Página: cambiamos las variables de CSS
+      const root = document.documentElement.style;
+      root.setProperty("--bg", palette.bg);
+      root.setProperty("--scene", palette.scene);
+      root.setProperty("--accent", palette.accent);
+      root.setProperty("--text", palette.text);
+      root.setProperty("--btn", palette.btn);
+      root.setProperty("--btn-text", palette.btnText);
+      document.querySelector('meta[name="theme-color"]').content = palette.bg;
+
+      // 2. Objetos 3D
+      outline.material.color.set(palette.edge);
+      cellBalls.forEach(ball => ball.material.color.set(palette.empty));
+      if (winTube) {
+        winTube.material.color.set(palette.win);
+      }
+
+      // 3. Letras ya colocadas: las volvemos a dibujar con los colores nuevos
+      letters.forEach((oldLetter, i) => {
+        if (!oldLetter) {
+          return;
+        }
+        scene.remove(oldLetter);
+        const newLetter = makeLetter(board[i]);
+        newLetter.position.copy(cellPositions[i]);
+        if (winningCells.includes(i)) {
+          newLetter.scale.set(1, 1, 1);
+        }
+        scene.add(newLetter);
+        letters[i] = newLetter;
+      });
+
+      // Marcamos la opción elegida en el panel
+      document.querySelectorAll(".palette-option").forEach(option => {
+        option.classList.toggle("active", option.dataset.key === key);
+      });
+
+      // Guardamos la elección (si el navegador lo permite)
+      try {
+        localStorage.setItem("palette", key);
+      } catch (error) {
+        // sin memoria disponible: no pasa nada, solo no se recordará
+      }
+    }
+
+    // Construimos la lista de paletas dentro del panel
+    const paletteList = document.getElementById("palette-list");
+    for (const [key, p] of Object.entries(PALETTES)) {
+      const option = document.createElement("button");
+      option.className = "palette-option";
+      option.dataset.key = key;
+      option.innerHTML =
+        `<span class="swatches">` +
+        [p.bg, p.edge, p.X, p.O, p.win].map(c => `<span style="background:${c}"></span>`).join("") +
+        `</span>${p.name}`;
+      option.addEventListener("click", () => applyPalette(key));
+      paletteList.appendChild(option);
+    }
+
+    // Abrir y cerrar el panel
+    const sheet = document.getElementById("palette-sheet");
+    document.getElementById("colors-button").addEventListener("click", () => {
+      sheet.hidden = false;
+    });
+    document.getElementById("palette-close").addEventListener("click", () => {
+      sheet.hidden = true;
+    });
+    sheet.addEventListener("click", event => {
+      if (event.target === sheet) {
+        sheet.hidden = true;   // tocar fuera del panel también lo cierra
+      }
+    });
+
+    // Al abrir la app: usamos la paleta guardada, o la original
+    let savedPalette = "original";
+    try {
+      savedPalette = localStorage.getItem("palette") || "original";
+    } catch (error) {
+      // sin memoria disponible: usamos la original
+    }
+    applyPalette(PALETTES[savedPalette] ? savedPalette : "original");
+    // ★★★★★★★★★★ FIN del cambio de paleta ★★★★★★★★★★
+
+    // ==========================================================
+    // K. DIBUJAR SIN PARAR
+    //    ★ CAMBIO (app): el cubo se ajusta solo si cambia el tamaño
+    //    de la pantalla (por ejemplo, al girar el teléfono)
+    // ==========================================================
+    function resize() {
+      const size = container.clientWidth;
+      renderer.setSize(size, size);
+    }
+    new ResizeObserver(resize).observe(container);
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    resize();
+    restartGame();
+    updateScore();
+    animate();
+
+    // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+    // NUEVO — ACTIVAR EL MODO SIN INTERNET
+    // Registra el "service worker" (archivo sw.js), que guarda una
+    // copia de la app para poder abrirla sin conexión.
+    // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("sw.js");
+    }
+  </script>
+</body>
+</html>
