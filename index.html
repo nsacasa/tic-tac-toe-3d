@@ -73,11 +73,18 @@
     }
 
     h1 {
-      margin: 0;
-      font-size: 1.5rem;
+      margin: 0 8px 0 0;
+      font-size: 1.2rem;
     }
 
-    #colors-button {
+    /* ★ NUEVO (vibración): los dos botones de arriba a la derecha, juntos */
+    .header-buttons {
+      display: flex;
+      gap: 6px;
+    }
+
+    #colors-button,
+    #haptics-button {
       padding: 8px 14px;
       font-size: 0.95rem;
       border: 2px solid var(--accent);
@@ -241,7 +248,10 @@
        ============================================================ -->
   <header>
     <h1>Tic-Tac-Toe 3D</h1>
-    <button id="colors-button">🎨 Colors</button>   <!-- ★ NUEVO (colores) -->
+    <div class="header-buttons">
+      <button id="haptics-button" aria-pressed="true">📳 On</button>   <!-- ★ NUEVO (vibración) -->
+      <button id="colors-button">🎨 Colors</button>   <!-- ★ NUEVO (colores) -->
+    </div>
   </header>
 
   <div id="modes">
@@ -498,13 +508,16 @@
         statusText.textContent = currentPlayer + " wins! 🎉";
         showWinningLine(winningLine);
         playWinSound();
+        haptic("win");    // ★ NUEVO (vibración): celebración
         score[currentPlayer]++;
         gameOver = true;
       } else if (!board.includes("")) {
         statusText.textContent = "It's a draw!";
+        haptic("tap");    // ★ NUEVO (vibración)
         score.draws++;
         gameOver = true;
       } else {
+        haptic("tap");    // ★ NUEVO (vibración): toque al colocar la pieza
         currentPlayer = currentPlayer === "X" ? "O" : "X";
         statusText.textContent = currentPlayer + "'s turn";
       }
@@ -577,12 +590,34 @@
     // ==========================================================
     let audioContext = null;
 
-    document.addEventListener("pointerdown", () => {
+    // ★ CAMBIO (sonido en el teléfono): el iPhone es más estricto que el Mac.
+    //   1. Escuchamos varios tipos de toque (no solo "pointerdown"), porque
+    //      el iPhone solo acepta encender el sonido en algunos de ellos.
+    //   2. Reproducimos un sonido vacío (silencio de una fracción de segundo):
+    //      es el truco habitual para "desbloquear" el audio en el iPhone.
+    function unlockAudio() {
       if (!audioContext) {
-        audioContext = new AudioContext();
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
       }
-      audioContext.resume();
-    });
+      if (audioContext.state !== "running") {
+        audioContext.resume();
+      }
+      const silence = audioContext.createBuffer(1, 1, 22050);
+      const source = audioContext.createBufferSource();
+      source.buffer = silence;
+      source.connect(audioContext.destination);
+      source.start(0);
+    }
+    ["pointerdown", "touchend", "click"].forEach(type =>
+      document.addEventListener(type, unlockAudio)
+    );
+
+    // ★ NUEVO (sonido en el teléfono): pide al iPhone que trate el juego
+    //   como "reproducción de audio", para que suene aunque el interruptor
+    //   de silencio esté activado (funciona en iPhones con iOS 17 o más nuevo).
+    if (navigator.audioSession) {
+      navigator.audioSession.type = "playback";
+    }
 
     // "bi-ip" cuando juega la computadora
     function playComputerSound() {
@@ -634,6 +669,76 @@
         playNote(note, start + i * 0.12, isLast ? 0.6 : 0.15);
       });
     }
+
+    // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+    // NUEVO — VIBRACIÓN (HAPTICS)
+    //
+    // Hay dos formas, según el teléfono:
+    //   - ANDROID: navigator.vibrate(...) hace vibrar el teléfono.
+    //     Recibe milisegundos: 15 = toque corto; una lista como
+    //     [40, 60, 40] = vibra 40, pausa 60, vibra 40.
+    //   - IPHONE: Apple no permite navigator.vibrate en la web.
+    //     Usamos un truco: desde iOS 18, activar un "interruptor"
+    //     (como los de Ajustes) da un toque suave. Creamos uno
+    //     invisible y lo activamos. Solo funciona en el mismo
+    //     instante en que tocas la pantalla.
+    // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+    const VIBRATION_PATTERNS = {
+      tap: 15,                       // colocar una pieza, botones
+      win: [40, 60, 40, 60, 120]     // celebración: tres pulsos
+    };
+
+    let hapticsOn = true;
+
+    // El interruptor invisible para el truco del iPhone
+    const iphoneSwitchLabel = document.createElement("label");
+    iphoneSwitchLabel.setAttribute("aria-hidden", "true");
+    iphoneSwitchLabel.style.display = "none";
+    const iphoneSwitch = document.createElement("input");
+    iphoneSwitch.type = "checkbox";
+    iphoneSwitch.setAttribute("switch", "");
+    iphoneSwitchLabel.appendChild(iphoneSwitch);
+    document.body.appendChild(iphoneSwitchLabel);
+
+    function haptic(kind) {
+      if (!hapticsOn) {
+        return;
+      }
+      if (navigator.vibrate) {
+        navigator.vibrate(VIBRATION_PATTERNS[kind]);   // Android
+      } else {
+        iphoneSwitchLabel.click();                     // iPhone (iOS 18 o más nuevo)
+      }
+    }
+
+    // Botón "📳 On / Off"
+    const hapticsButton = document.getElementById("haptics-button");
+
+    function setHaptics(on) {
+      hapticsOn = on;
+      hapticsButton.textContent = on ? "📳 On" : "📳 Off";
+      hapticsButton.setAttribute("aria-pressed", on ? "true" : "false");
+      try {
+        localStorage.setItem("haptics", on ? "on" : "off");
+      } catch (error) {
+        // sin memoria disponible: no se recordará, pero funciona igual
+      }
+    }
+
+    hapticsButton.addEventListener("click", () => {
+      setHaptics(!hapticsOn);
+      haptic("tap");   // al encenderla, vibra una vez para confirmarlo
+    });
+
+    // Al abrir la app: usamos lo que eligió la última vez (encendida por defecto)
+    let savedHaptics = "on";
+    try {
+      savedHaptics = localStorage.getItem("haptics") || "on";
+    } catch (error) {
+      // sin memoria disponible: queda encendida
+    }
+    setHaptics(savedHaptics === "on");
+    // ★★★★★★★★★★ FIN de la vibración ★★★★★★★★★★
 
     // ==========================================================
     // I. TOCAR UNA BOLITA DEL CUBO 3D
@@ -732,7 +837,10 @@
       updateScore();
     }
     modeButtons.forEach(b => b.addEventListener("click", changeMode));
-    document.getElementById("restart").addEventListener("click", restartGame);
+    document.getElementById("restart").addEventListener("click", () => {
+      haptic("tap");   // ★ NUEVO (vibración)
+      restartGame();
+    });
 
     // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
     // NUEVO — CAMBIAR DE PALETA
