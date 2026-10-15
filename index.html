@@ -125,7 +125,10 @@
 
     /* El recuadro donde se dibuja el cubo 3D.
        ★ APP: tan grande como quepa en la pantalla, sin pasar de 560px */
+    /* ★ CAMBIO (vibración en iPhone): el cubo ahora es una "etiqueta"
+       (<label>) unida al interruptor invisible de abajo */
     #scene {
+      display: block;
       width: max(220px, min(560px, calc(100vw - 32px), calc(100vh - 330px)));
       width: max(220px, min(560px, calc(100vw - 32px), calc(100dvh - 330px)));
       aspect-ratio: 1;
@@ -134,6 +137,16 @@
       cursor: grab;
       touch-action: none;
       transition: background 0.3s;
+    }
+
+    /* ★ NUEVO (vibración en iPhone): el interruptor existe pero no se ve.
+       No usamos display:none porque el iPhone podría ignorarlo. */
+    .haptic-switch {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
     }
 
     #hint {
@@ -262,7 +275,11 @@
   <div id="status"></div>
 
   <!-- Aquí dentro Three.js dibuja el cubo -->
-  <div id="scene"></div>
+  <!-- ★ CAMBIO (vibración en iPhone): el cubo es una <label> unida al
+       interruptor invisible. Para el iPhone, tocar el cubo = tocar el
+       interruptor, y los interruptores dan un toque suave al cambiar. -->
+  <label id="scene" for="haptic-switch"></label>
+  <input type="checkbox" switch id="haptic-switch" class="haptic-switch" tabindex="-1" aria-hidden="true">
   <div id="hint">Drag to rotate · Pinch to zoom · Tap a ball to play</div>
 
   <button id="restart">New game</button>
@@ -721,10 +738,12 @@
     //     Recibe milisegundos: 15 = toque corto; una lista como
     //     [40, 60, 40] = vibra 40, pausa 60, vibra 40.
     //   - IPHONE: Apple no permite navigator.vibrate en la web.
-    //     Usamos un truco: desde iOS 18, activar un "interruptor"
-    //     (como los de Ajustes) da un toque suave. Creamos uno
-    //     invisible y lo activamos. Solo funciona en el mismo
-    //     instante en que tocas la pantalla.
+    //     Pero desde iOS 18, cuando TU DEDO cambia un "interruptor"
+    //     (como los de Ajustes), el iPhone da un toque suave.
+    //     El cubo es una etiqueta unida a un interruptor invisible:
+    //     al tocar el cubo, tu dedo cambia el interruptor. La app
+    //     solo deja pasar ese toque cuando colocas una pieza.
+    //     (Activarlo desde el código ya no funciona: Apple lo bloquea.)
     // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
     const VIBRATION_PATTERNS = {
       tap: 15,                       // colocar una pieza, botones
@@ -739,36 +758,31 @@
     const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
       (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
-    // ★ CAMBIO (vibración en iPhone): el truco del interruptor, igual que la
-    //   librería "ios-haptics": se crea un interruptor invisible, se activa
-    //   (esto da el toque) y se borra. Se hace de nuevo en cada vibración.
-    function iphoneTick() {
-      const label = document.createElement("label");
-      label.setAttribute("aria-hidden", "true");
-      label.style.display = "none";
-      const input = document.createElement("input");
-      input.type = "checkbox";
-      input.setAttribute("switch", "");
-      label.appendChild(input);
-      document.head.appendChild(label);
-      label.click();
-      document.head.removeChild(label);
-    }
+    // ★ CAMBIO (vibración en iPhone): "¿quiere vibrar este toque?"
+    //   haptic() lo pone en true cuando colocas una pieza; justo después,
+    //   el navegador envía el "clic" del toque al cubo y lo comprobamos.
+    let iphoneTickWanted = false;
 
     function haptic(kind) {
       if (!hapticsOn) {
         return;
       }
-      try {
-        if (isIOS) {
-          iphoneTick();                                  // iPhone (iOS 18 o más nuevo)
-        } else if (navigator.vibrate) {
-          navigator.vibrate(VIBRATION_PATTERNS[kind]);   // Android
-        }
-      } catch (error) {
-        // si el teléfono no lo permite, simplemente no vibra
+      if (isIOS) {
+        iphoneTickWanted = true;                       // iPhone: lo hace tu toque (abajo)
+      } else if (navigator.vibrate) {
+        navigator.vibrate(VIBRATION_PATTERNS[kind]);   // Android
       }
     }
+
+    // El "clic" de tu toque sobre el cubo. Si no colocaste una pieza
+    // (tocaste un hueco, giraste el cubo o es el turno de la computadora),
+    // lo cancelamos con preventDefault: el interruptor no cambia y no vibra.
+    document.getElementById("scene").addEventListener("click", event => {
+      if (!iphoneTickWanted) {
+        event.preventDefault();
+      }
+      iphoneTickWanted = false;
+    });
 
     // Botón "📳 On / Off"
     const hapticsButton = document.getElementById("haptics-button");
@@ -843,6 +857,7 @@
     renderer.domElement.addEventListener("pointerdown", event => {
       pressX = event.clientX;
       pressY = event.clientY;
+      iphoneTickWanted = false;   // ★ NUEVO (vibración en iPhone): cada toque empieza sin vibración
     });
 
     renderer.domElement.addEventListener("pointerup", event => {

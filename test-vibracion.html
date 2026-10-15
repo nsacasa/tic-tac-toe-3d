@@ -63,6 +63,32 @@
     <p id="vibrate-result"></p>
   </div>
 
+  <div class="card">
+    <h2>Prueba 4: etiqueta unida a un interruptor oculto</h2>
+    <p>Toca el botón. Tu dedo cambia un interruptor que no se ve. ¿Notas un toque suave?</p>
+    <label for="t4" class="label-button">Tocar aquí</label>
+    <input id="t4" type="checkbox" switch class="hidden-switch" tabindex="-1" aria-hidden="true">
+  </div>
+
+  <div class="card">
+    <h2>Prueba 5: igual que el cubo del juego</h2>
+    <p>Toca dentro del recuadro (funciona igual que el cubo). ¿Notas un toque suave?</p>
+    <label for="t5" class="box">Toca este recuadro</label>
+    <input id="t5" type="checkbox" switch class="hidden-switch" tabindex="-1" aria-hidden="true">
+  </div>
+
+  <style>
+    .hidden-switch { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+    .label-button {
+      display: inline-block; padding: 12px 20px; border-radius: 999px;
+      background: #facc15; color: #1e1b4b; font-weight: bold;
+    }
+    .box {
+      display: flex; align-items: center; justify-content: center;
+      height: 140px; border-radius: 12px; background: #2e2a6b;
+    }
+  </style>
+
   <script>
     // Qué teléfono y qué versión es
     const ua = navigator.userAgent;
