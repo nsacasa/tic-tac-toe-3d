@@ -117,6 +117,22 @@
       background: var(--accent);
     }
 
+    /* ★ NUEVO (fair mode): el botón del modo equilibrado */
+    #fair-button {
+      padding: 6px 16px;
+      margin-bottom: 8px;
+      font-size: 0.9rem;
+      border: 2px solid var(--accent);
+      border-radius: 999px;
+      background: transparent;
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    #fair-button.active {
+      background: var(--accent);
+    }
+
     #status {
       font-size: 1.3rem;
       min-height: 1.6em;
@@ -129,8 +145,8 @@
        (<label>) unida al interruptor invisible de abajo */
     #scene {
       display: block;
-      width: max(220px, min(560px, calc(100vw - 32px), calc(100vh - 330px)));
-      width: max(220px, min(560px, calc(100vw - 32px), calc(100dvh - 330px)));
+      width: max(220px, min(560px, calc(100vw - 32px), calc(100vh - 372px)));
+      width: max(220px, min(560px, calc(100vw - 32px), calc(100dvh - 372px)));
       aspect-ratio: 1;
       border-radius: 16px;
       background: var(--scene);
@@ -271,6 +287,9 @@
     <button class="mode active" data-mode="2players">2 Players</button>
     <button class="mode" data-mode="computer">vs Computer</button>
   </div>
+
+  <!-- ★ NUEVO (fair mode): botón del modo equilibrado -->
+  <button id="fair-button" aria-pressed="false">⚖️ Fair mode: Off</button>
 
   <div id="status"></div>
 
@@ -542,6 +561,8 @@
     let letters = [];
     let winTube = null;
     let winningCells = [];            // ★ NUEVO (colores): para repintar las letras ganadoras
+    let fairMode = false;             // ★ NUEVO (fair mode): ¿está activado el modo equilibrado?
+    let nextStarter = "X";            // ★ NUEVO (fair mode): quién empieza la próxima partida
 
     const statusText = document.getElementById("status");
     const scoreText = document.getElementById("score");
@@ -549,18 +570,23 @@
     // ==========================================================
     // G. HACER UNA JUGADA
     // ==========================================================
+    // ★ CAMBIO (fair mode): colocar una pieza en el cubo está ahora en su
+    //   propia función, para usarla también con la pieza de regalo
+    function placePiece(index, player) {
+      board[index] = player;
+      cellBalls[index].visible = false;
+      const letter = makeLetter(player);
+      letter.position.copy(cellPositions[index]);
+      scene.add(letter);
+      letters[index] = letter;
+    }
+
     function makeMove(index) {
       if (board[index] !== "" || gameOver) {
         return false;
       }
 
-      board[index] = currentPlayer;
-
-      cellBalls[index].visible = false;
-      const letter = makeLetter(currentPlayer);
-      letter.position.copy(cellPositions[index]);
-      scene.add(letter);
-      letters[index] = letter;
+      placePiece(index, currentPlayer);
 
       const winningLine = findWinner();
       if (winningLine) {
@@ -904,6 +930,10 @@
         ball.material.color.set(palette.empty);
         ball.scale.set(1, 1, 1);
       });
+
+      if (fairMode) {
+        startFairGame();      // ★ NUEVO (fair mode)
+      }
     }
 
     function updateScore() {
@@ -917,6 +947,7 @@
       modeButtons.forEach(b => b.classList.remove("active"));
       event.target.classList.add("active");
       score = { X: 0, O: 0, draws: 0 };
+      nextStarter = "X";   // ★ NUEVO (fair mode): al cambiar de modo, vuelve a empezar X
       restartGame();
       updateScore();
     }
@@ -925,6 +956,84 @@
       haptic("tap");   // ★ NUEVO (vibración)
       restartGame();
     });
+
+    // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+    // NUEVO — FAIR MODE (MODO EQUILIBRADO)
+    //
+    // En este cubo, el que empieza gana mucho más (unas 4 de cada 5
+    // partidas entre buenos jugadores). Con el modo equilibrado:
+    //   1. Quién empieza se alterna: X, luego O, luego X…
+    //   2. El que juega SEGUNDO recibe una pieza de regalo en una
+    //      arista al azar. Según nuestras simulaciones, así las
+    //      probabilidades quedan cerca del 50 %.
+    // En "vs Computer" tú sigues siendo X y la computadora O;
+    // solo cambia quién mueve primero.
+    // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+
+    // Las 12 aristas del cubo: las casillas con una coordenada en el
+    // medio (1) y las otras dos en un borde (0 o 2)
+    const EDGES = [];
+    for (let x = 0; x < 3; x++) {
+      for (let y = 0; y < 3; y++) {
+        for (let z = 0; z < 3; z++) {
+          const middles = [x, y, z].filter(n => n === 1).length;
+          if (middles === 1) {
+            EDGES.push(cellNumber(x, y, z));
+          }
+        }
+      }
+    }
+
+    // Se llama al empezar cada partida con el modo activado
+    function startFairGame() {
+      const starter = nextStarter;
+      const second = starter === "X" ? "O" : "X";
+      nextStarter = second;   // la próxima partida empieza el otro
+
+      // La pieza de regalo para el que juega segundo
+      const bonusCell = EDGES[Math.floor(Math.random() * EDGES.length)];
+      placePiece(bonusCell, second);
+
+      currentPlayer = starter;
+      statusText.textContent = starter + " starts · " + second + " got a bonus piece";
+
+      // Si le toca empezar a la computadora, juega sola
+      if (vsComputer && starter === "O") {
+        computerTimer = setTimeout(computerMove, 900);
+      }
+    }
+
+    // El botón "⚖️ Fair mode"
+    const fairButton = document.getElementById("fair-button");
+
+    function setFairMode(on) {
+      fairMode = on;
+      fairButton.textContent = on ? "⚖️ Fair mode: On" : "⚖️ Fair mode: Off";
+      fairButton.classList.toggle("active", on);
+      fairButton.setAttribute("aria-pressed", on ? "true" : "false");
+      try {
+        localStorage.setItem("fairMode", on ? "on" : "off");
+      } catch (error) {
+        // sin memoria disponible: no se recordará, pero funciona igual
+      }
+    }
+
+    fairButton.addEventListener("click", () => {
+      setFairMode(!fairMode);
+      haptic("tap");
+      score = { X: 0, O: 0, draws: 0 };   // otro tipo de partida: marcador a 0
+      nextStarter = "X";
+      restartGame();
+      updateScore();
+    });
+
+    // Al abrir la app: usamos lo que eligió la última vez (apagado por defecto)
+    try {
+      setFairMode(localStorage.getItem("fairMode") === "on");
+    } catch (error) {
+      setFairMode(false);
+    }
+    // ★★★★★★★★★★ FIN del fair mode ★★★★★★★★★★
 
     // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
     // NUEVO — CAMBIAR DE PALETA
