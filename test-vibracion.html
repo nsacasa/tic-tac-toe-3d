@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prueba de vibración</title>
+  <!-- Página de diagnóstico: ayuda a saber por qué no vibra el iPhone -->
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #1e1b4b;
+      color: #ffffff;
+      margin: 0;
+      padding: 24px 16px;
+      line-height: 1.5;
+    }
+    h1 { font-size: 1.4rem; margin: 0 0 16px; }
+    .card {
+      background: #15123a;
+      border-radius: 14px;
+      padding: 14px 16px;
+      margin-bottom: 14px;
+    }
+    .card h2 { font-size: 1rem; margin: 0 0 6px; }
+    .card p { margin: 0 0 10px; opacity: 0.85; font-size: 0.95rem; }
+    button {
+      padding: 12px 20px;
+      font-size: 1rem;
+      border: none;
+      border-radius: 999px;
+      background: #facc15;
+      color: #1e1b4b;
+      font-weight: bold;
+    }
+    input[switch] { transform: scale(1.4); margin-left: 6px; }
+    #info { font-family: ui-monospace, monospace; font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <h1>Prueba de vibración</h1>
+
+  <div class="card">
+    <h2>Tu teléfono</h2>
+    <div id="info"></div>
+  </div>
+
+  <div class="card">
+    <h2>Prueba 1: interruptor visible</h2>
+    <p>Toca el interruptor con el dedo. ¿Notas un toque suave?</p>
+    <label>Interruptor <input type="checkbox" switch></label>
+  </div>
+
+  <div class="card">
+    <h2>Prueba 2: truco invisible (el que usa el juego)</h2>
+    <p>Pulsa el botón. ¿Notas un toque suave?</p>
+    <button id="trick">Probar truco</button>
+  </div>
+
+  <div class="card">
+    <h2>Prueba 3: vibración estándar (Android)</h2>
+    <p>En iPhone no debería hacer nada; en Android debería vibrar.</p>
+    <button id="vibrate">Probar vibrate</button>
+    <p id="vibrate-result"></p>
+  </div>
+
+  <script>
+    // Qué teléfono y qué versión es
+    const ua = navigator.userAgent;
+    const iosMatch = ua.match(/OS (\d+)_(\d+)/);
+    const isIOS = /iPhone|iPad|iPod/.test(ua) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    const standalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+    document.getElementById("info").innerHTML =
+      "iPhone/iPad: " + (isIOS ? "sí" : "no") + "<br>" +
+      "Versión iOS: " + (iosMatch ? iosMatch[1] + "." + iosMatch[2] : "desconocida") +
+      (iosMatch && Number(iosMatch[1]) < 18 ? " ⚠️ (necesita 18 o más)" : "") + "<br>" +
+      "navigator.vibrate: " + (navigator.vibrate ? "existe" : "no existe") + "<br>" +
+      "Abierta como app instalada: " + (standalone ? "sí" : "no");
+
+    // Prueba 2: el mismo truco que el juego
+    document.getElementById("trick").addEventListener("click", () => {
+      const label = document.createElement("label");
+      label.setAttribute("aria-hidden", "true");
+      label.style.display = "none";
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.setAttribute("switch", "");
+      label.appendChild(input);
+      document.head.appendChild(label);
+      label.click();
+      document.head.removeChild(label);
+    });
+
+    // Prueba 3: navigator.vibrate
+    document.getElementById("vibrate").addEventListener("click", () => {
+      const result = navigator.vibrate ? navigator.vibrate(200) : "no existe";
+      document.getElementById("vibrate-result").textContent = "Resultado: " + result;
+    });
+  </script>
+</body>
+</html>
